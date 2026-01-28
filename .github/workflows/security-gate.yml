@@ -34,12 +34,12 @@ jobs:
             -w /repo \
             zricethezav/gitleaks:latest \
             dir \
-            --source . \
             --config gitleaks.toml \
             --report-format json \
             --report-path reports/gitleaks.json \
             --redact \
-            --exit-code 0
+            --exit-code 0 \
+            .
 
       # -----------------------------
       # 2) TRIVY (Vuln scan in repo)
