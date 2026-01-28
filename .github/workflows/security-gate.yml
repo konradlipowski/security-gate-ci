@@ -1,0 +1,107 @@
+name: Security Gate
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  security-gate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prepare reports dir
+        run: mkdir -p reports
+
+      # -----------------------------
+      # 1) GITLEAKS (Secrets scanning)
+      # -----------------------------
+      - name: Gitleaks (JSON report)
+        run: |
+          docker pull zricethezav/gitleaks:latest
+          docker run --rm \
+            -v "$PWD:/repo" \
+            -w /repo \
+            zricethezav/gitleaks:latest \
+            git \
+            --config gitleaks.toml \
+            --report-format json \
+            --report-path reports/gitleaks.json \
+            --redact 100 \
+            --exit-code 0
+
+      # -----------------------------
+      # 2) TRIVY (Vuln scan in repo)
+      # -----------------------------
+      - name: Trivy (SARIF report)
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'reports/trivy.sarif'
+          ignore-unfixed: true
+          severity: 'HIGH,CRITICAL'
+          exit-code: '0'
+
+      # Optional: upload SARIF to Security tab (if available)
+      - name: Upload Trivy SARIF to Security tab (optional)
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: 'reports/trivy.sarif'
+          category: 'trivy'
+
+      # -----------------------------
+      # 3) SEMGREP (SAST)
+      # -----------------------------
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Semgrep
+        run: |
+          python -m pip install --upgrade pip
+          pip install semgrep
+
+      - name: Semgrep (SARIF report)
+        run: |
+          semgrep scan \
+            --config p/owasp-top-ten \
+            --sarif-output reports/semgrep.sarif \
+            --metrics=off \
+            --quiet || true
+
+      - name: Upload Semgrep SARIF to Security tab (optional)
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: 'reports/semgrep.sarif'
+          category: 'semgrep'
+
+      # -----------------------------
+      # 4) SECURITY GATE (policy)
+      # -----------------------------
+      - name: Run Security Gate
+        run: python scripts/security_gate.py
+
+      # -----------------------------
+      # 5) ARTIFACTS
+      # -----------------------------
+      - name: Upload reports artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports
+          path: reports/

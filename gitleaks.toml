@@ -1,0 +1,12 @@
+title = "Repo Gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Ignore common non-secret files"
+paths = [
+  '''^package-lock\.json$''',
+  '''^pnpm-lock\.yaml$''',
+  '''^yarn\.lock$'''
+]
