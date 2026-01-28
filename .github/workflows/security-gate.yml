@@ -33,11 +33,12 @@ jobs:
             -v "$PWD:/repo" \
             -w /repo \
             zricethezav/gitleaks:latest \
-            git \
+            dir \
+            --source . \
             --config gitleaks.toml \
             --report-format json \
             --report-path reports/gitleaks.json \
-            --redact 100 \
+            --redact \
             --exit-code 0
 
       # -----------------------------
